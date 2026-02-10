@@ -2,17 +2,43 @@
 import { GoogleGenAI } from "@google/genai";
 import { AspectRatio, ImageSize, InspirationItem } from "./types";
 
+const BASE64_IMAGE_REGEX = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/;
+
 export class GeminiService {
   /**
    * 每次请求前动态创建客户端实例，确保使用最新的 API Key。
    */
   private static getClient() {
-    const apiKey = process.env.API_KEY;
+    // Create a new instance right before making an API call to ensure it uses the latest API key.
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("API_KEY_MISSING");
+      throw new Error('MISSING_GEMINI_API_KEY');
     }
-    return new GoogleGenAI({ apiKey });
+    const baseUrl = process.env.GEMINI_BASE_URL;
+    const clientOptions: ConstructorParameters<typeof GoogleGenAI>[0] = { apiKey };
+    if (baseUrl) {
+      clientOptions.httpOptions = { baseUrl };
+    }
+    return new GoogleGenAI(clientOptions);
   }
+
+  private static extractImageFromParts(parts?: any[]): string | null {
+    if (!parts) return null;
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const mimeType = part.inlineData.mimeType || 'image/png';
+        return `data:${mimeType};base64,${part.inlineData.data}`;
+      }
+      if (typeof part.text === 'string') {
+        const match = part.text.match(BASE64_IMAGE_REGEX);
+        if (match) {
+          return match[0];
+        }
+      }
+    }
+    return null;
+  }
+
 
   /**
    * 指数退避重试包装函数
@@ -111,6 +137,7 @@ export class GeminiService {
         model,
         contents: { parts },
         config: {
+          responseModalities: ['TEXT', 'IMAGE'],
           systemInstruction: "You are a specialized image processing engine. Output strictly one image part. Do not output text, explanations, or any conversational elements. Your output must contain the processed image data based on the instructions provided. When multiple images are provided, use them as reference as instructed in the prompt.",
           imageConfig: {
             aspectRatio: aspectRatio
@@ -148,6 +175,7 @@ export class GeminiService {
         config: {
           systemInstruction: "You are a professional image generator. Strictly output the image part only. Do not provide descriptions or text feedback.",
           imageConfig: {
+            responseModalities: ['TEXT', 'IMAGE'], 
             aspectRatio: aspectRatio,
             ...(isPro ? { imageSize: '1K' as ImageSize } : {})
           }

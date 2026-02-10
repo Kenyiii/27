@@ -1,0 +1,7 @@
+{
+  "name": "ZHILI",
+  "description": "A professional-grade desktop-style interface for generating and editing high-quality images using Gemini 2.5 and 3.0 models.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
